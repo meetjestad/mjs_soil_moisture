@@ -5,35 +5,31 @@
 
 //bytes that are expected
 const int byte_number = 4;
-uint8_t lev=0;
-uint8_t levels=6;
 uint8_t rec_buf[byte_number];
 
-union {
-  uint8_t b[4];
-  float f;
-} av;
+const uint8_t levels=6;
+uint16_t l[levels];
+uint8_t t[levels];
 
 union {
-  uint8_t b[4];
-  float f;
-} st;
+    uint8_t b[2];
+    uint16_t i;
+  } C;
 
-union {
-  uint8_t b[2];
-  uint16_t i;
-} T;
+uint8_t T;
 
-//I2C pins
-//int Sda = 21; //I2C
-//int Scl = 22; //I2C
+float T_conv;
+float C_conv;
 
+int n=0;
 int c;
 int samples=10;
+
 
 void setup() {
   //Begin serial
   Serial.begin(9600); // start serial for output
+  Serial.println("Requesting measurements from I2C slave device");
 
   //Start wire connection
   Wire.begin(); // join i2c bus (SDA,SCL)
@@ -42,33 +38,33 @@ void setup() {
 
 void loop() {
 
-  send_reg();
-  delay(10000);
-  
-  //measure capacity
-  measure_cap();
-
-}
-
-void send_reg(){
-  Serial.print("Request measurement of level "+String(lev)+": ");
-  Wire.beginTransmission(0x04);
-  Wire.write(lev);
-  int check=Wire.endTransmission();
-  
-  lev++;
-  if(lev>=levels){
-    lev=0;
+  if(n==0){
+    Serial.print("NC :");
   }
-  
-  if(check==0){
-    Serial.print("Acknowledged\n");
+  else if(n==1){
+    Serial.print("Ref:");
   }
   else{
-    Serial.print("Error\n");    
+    Serial.print("L"+String(n-1)+" :");
+  }
+  
+  readSoilMoisture(n);
+  T_conv=float(t[n])/4-20;
+    
+  if(l[n]!=0){
+    Serial.print(String(l[n])+" femto-F | "+String(T_conv)+" C\n");
+  }
+  else{
+    delay(1000);
+  }
+
+  n++;
+
+  if(n==levels){
+    n=0;
+    Serial.println();
   }
 }
-
 
 void readSoilMoisture(int lev){
 
@@ -89,7 +85,7 @@ void readSoilMoisture(int lev){
   int check=Wire.endTransmission();
   
   if(check==0){
-    Serial.print(F("Ack"));
+    //Serial.print(F("Ack"));
     //wait for sensor
     delay(10000);
 
@@ -109,21 +105,21 @@ void readSoilMoisture(int lev){
 
     //checksum if the expected number of bytes are recieved
     if (i = byte_number) {
-      Serial.print(F("Suc"));
+      Serial.print(" Ack | ");
       l[lev] = C.i;
       t[lev] = T;      
     }
     
     else {
       //invalid number of bytes recievd or no data
-      Serial.print(F("Er"));
+      Serial.print(" Error, unexpected number of bytes\n");
       l[lev] = 0;
       t[lev] = 0;
     }
   }
   
   else{
-    Serial.println("Er");
+    Serial.println(" Error, no I2C connection\n");
     l[lev] = 0;
     t[lev] = 0;    
   }

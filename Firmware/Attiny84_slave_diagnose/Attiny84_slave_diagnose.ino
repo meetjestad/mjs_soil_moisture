@@ -1,10 +1,10 @@
+ //before uploading set the arduino as ISP, using the example sketch, ArduinoISP
+
 // Code for the ATtiny84
 // Board = ATtiny84
 //Processor = Attiny84
 //Clock speed = 8mhz
 //Programmer = Arduino as ISP
-
-// VERSION = V2.1 
 
 #define I2C_SLAVE_ADDRESS 0x4 // Address of the slave
  
@@ -14,11 +14,11 @@
 
 //measurement 
 const int samples=50;
-const int num=6; //4 levels, 1x NC and 1x reference
+const int num=6; //4 levels and 2xreference
 unsigned long interval = 10000;
 float C_raw_freq[samples];
 float k = 1;
-float R=1000000; //Mohm
+float R=996000; //Mohm
 
 //for the I2C data transfer
 uint8_t reg=0;
@@ -39,12 +39,18 @@ struct level{
 
 struct level L[num];
 
-union{
-  uint16_t i;
-  unsigned char b[2];
-} C;
+union fl{
+  float F;
+  unsigned char b[4];
+};
 
-uint8_t T;
+fl av;
+fl st;
+
+union t{
+  uint16_t raw;
+  unsigned char b[2];
+} T;
 
 //pin declaration
 int S0=7;
@@ -58,36 +64,35 @@ int F_OUT=8;
 
 //multiplexer settings
 void setMult(){
-  L[0].S0=1; // A7 = 1 = Not connected
-  L[0].S1=1;
-  L[0].S2=1;
-  L[0].E=0;
+  L[0].S0=0;
+  L[0].S1=0;
+  L[0].S2=0;
+  L[0].E=1;
   
-  L[1].S0=0; // A4 = 1 = Reference
-  L[1].S1=0;
-  L[1].S2=1;
+  L[1].S0=0;
+  L[1].S1=1;
+  L[1].S2=0;
   L[1].E=0;
   
-  L[2].S0=0; // A2 = 15 = L1
-  L[2].S1=1;
+  L[2].S0=1;
+  L[2].S1=0;
   L[2].S2=0;
   L[2].E=0;
   
-  L[3].S0=1; // A1 = 14 = L2
+  L[3].S0=0;
   L[3].S1=0;
   L[3].S2=0;
   L[3].E=0;
-
-  L[4].S0=0; // A0 = 13 = L3
-  L[4].S1=0;
+  
+  L[4].S0=1;
+  L[4].S1=1;
   L[4].S2=0;
   L[4].E=0;
 
-  L[5].S0=1;  //A3 = 12 = L4
-  L[5].S1=1;
-  L[5].S2=0;
+  L[5].S0=0;
+  L[5].S1=0;
+  L[5].S2=1;
   L[5].E=0;
-
 }
 
 //interrupt function
@@ -189,19 +194,14 @@ void measure_loop(){
   pulseOn=false;
 
   //calculate and store frequency data 
-  C.i=pow(10,15)/(array_mean(C_raw_freq)*R);
-  T=calc_temp(NTC_temp(10)); //10=number of samples
+  av.F=array_mean(C_raw_freq);
+  st.F=array_stdev(C_raw_freq);
+  T.raw=NTC_temp(10); //10=number of samples
 
   //reset the array
   for(int i=0; i<samples;i++){
     C_raw_freq[i]=0;
   }
-
-  //multiplexer disabled
-  digitalWrite(S0,LOW);
-  digitalWrite(S1,LOW);
-  digitalWrite(S2,LOW);
-  digitalWrite(E,HIGH);
 }
 
 void setup(){
@@ -216,11 +216,10 @@ void setup(){
   pinMode(NTC_H, INPUT); // floating
   pinMode(NTC_I, INPUT); // actual input
 
-  //multiplexer disabled
   digitalWrite(S0,LOW);
   digitalWrite(S1,LOW);
   digitalWrite(S2,LOW);
-  digitalWrite(E,HIGH);
+  digitalWrite(E,LOW);
 
   //set the multiplexer values
   setMult();
@@ -255,9 +254,17 @@ void requestEvent(){
     
     //send the register
     TinyWireS.send(reg);
-    TinyWireS.send(C.b[0]);
-    TinyWireS.send(C.b[1]);
-    TinyWireS.send(T);
+    TinyWireS.send(av.b[0]);
+    TinyWireS.send(av.b[1]);
+    TinyWireS.send(av.b[2]);
+    TinyWireS.send(av.b[3]);
+    TinyWireS.send(st.b[0]);
+    TinyWireS.send(st.b[1]);
+    TinyWireS.send(st.b[2]);
+    TinyWireS.send(st.b[3]);
+    TinyWireS.send(T.b[0]);
+    TinyWireS.send(T.b[1]);
+    
 }
 
 void recieveEvent(){
@@ -269,26 +276,4 @@ void recieveEvent(){
   //perform measurement for this level
   measure_loop();
   
-}
-
-uint8_t calc_temp(uint16_t Tint){
-
-  //ADC values
-  float Vcc = 3.3;
-  float steps = 1024;
-
-  //NTC parameters
-  float r0=100000;
-  float T0=25+273;
-  float r_ref=125000; //adjust
-  float beta=4036;
-
-  float Tv=(Vcc/steps)*Tint;
-  float Tr=(Vcc-Tv)/(Tv/r_ref);
-  float Tc=1/(log(Tr/r0)/beta+1/T0)-273;
-
-  uint8_t Traw = (Tc+20)*4;
-
-  return Traw;
-
 }
