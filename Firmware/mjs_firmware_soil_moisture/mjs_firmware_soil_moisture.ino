@@ -24,7 +24,7 @@
 #include <avr/power.h>
 #include <util/atomic.h>
 
-#define DEBUG false
+#define DEBUG true
 #include "bitstream.h"
 #include "mjs_lmic.h"
 
@@ -132,7 +132,6 @@ void setup() {
   // when in debugging mode start serial connection
   if(DEBUG) {
     Serial.begin(9600);
-    Serial.println(F("Start"));
   }
 
   // setup LoRa transceiver
@@ -151,63 +150,7 @@ void setup() {
   digitalWrite(LED_PIN, HIGH);
   delay(500);
   digitalWrite(LED_PIN, LOW);
-
-  // start communication to sensors
-  htu.begin();
-
-
-if (DEBUG) {
-  temperature = htu.readTemperature();
-  humidity = htu.readHumidity();
-  vcc = readVcc();
   
-  #ifdef WITH_SM
-    //set soil moisture
-    setSoilMoisture();
-    
-    //switch ground pin on
-    digitalWrite(SW_GND_PIN, HIGH); 
-    delay(5000);
-    
-    for (int i=0;i<levels;i++){
-      readSoilMoisture(i);
-    }
-
-    //switch ground pin off
-    digitalWrite(SW_GND_PIN, LOW); 
-
-    
-  #endif // WITH_SM
-   
-  #ifdef WITH_LUX
-    lux = readLux();
-  #endif
-    Serial.print(F("Temperature: "));
-    Serial.println(temperature);
-    Serial.print(F("Humidity: "));
-    Serial.println(humidity);
-    Serial.print(F("Vcc: "));
-    Serial.println(vcc);
-  #ifdef WITH_LUX
-    Serial.print(F("Lux: "));
-    Serial.println(lux);
-  #endif // WITH_LUX
-  #ifdef WITH_SM
-    Serial.print(F("Soil: "));
-    Serial.println(l[0]);
-    Serial.println(l[1]);
-    Serial.println(l[2]);
-    Serial.println(l[3]);
-    Serial.println(l[4]);
-    Serial.println(l[5]);
-  #endif // WITH_SM
-
-    if (BATTERY_DIVIDER_RATIO) {
-      Serial.print(F("Battery Divider Ratio: "));
-      Serial.print(BATTERY_DIVIDER_RATIO);
-    }
-    Serial.flush();
-  }
 }
 
 void loop() {
@@ -227,7 +170,8 @@ void loop() {
   }
   updatesBeforeGpsUpdate--;
 
-  // Activate and read our sensors
+  // Activate and read our sensorss
+  htu.begin(); //includes a wire.begin in the sparfun library moved here from setup
   temperature = htu.readTemperature();
   humidity = htu.readHumidity();
   vcc = readVcc();
@@ -236,12 +180,13 @@ void loop() {
   
   //switch ground pin on
   digitalWrite(SW_GND_PIN, HIGH); 
-  delay(5000);
+  delay(5000); //time for sensor to start-up
     
-  setSoilMoisture();
+  BeginSoilMoisture();
   for(int i=0;i<levels;i++){
     readSoilMoisture(i);
   }
+  EndSoilMoisture();
 
   //switch ground pin off  
   digitalWrite(SW_GND_PIN, LOW); 
@@ -252,8 +197,9 @@ void loop() {
   lux = readLux();
 #endif // WITH_LUX
 
-  if (DEBUG)
+  if (DEBUG){
     dumpData();
+  }
 
   // Work around a race condition in LMIC, that is greatly amplified
   // if we sleep without calling runloop and then queue data
@@ -274,9 +220,9 @@ void loop() {
     sleepDuration = 0;
 
   if (DEBUG) {
-    Serial.print(F("Sleep for "));
+    Serial.print(F("Slp "));
     Serial.print(sleepDuration);
-    Serial.println(F("ms..."));
+    Serial.println(F("ms.."));
     Serial.flush();
   }
   doSleep(sleepDuration);
@@ -318,14 +264,15 @@ void doSleep(uint32_t time) {
 }
 
 void dumpData() {
-  if (gps_data.valid.location && gps_data.valid.status && gps_data.status >= gps_fix::STATUS_STD) {
-    Serial.print(F("lat/lon: "));
-    Serial.print(gps_data.latitudeL()/10000000.0, 6);
-    Serial.print(F(","));
-    Serial.println(gps_data.longitudeL()/10000000.0, 6);
-  } else {
-    Serial.println(F("No GPS"));
-  }
+  //disabled due to program storage place limitations
+  //if (gps_data.valid.location && gps_data.valid.status && gps_data.status >= gps_fix::STATUS_STD) {
+    //Serial.print(F("lat/lon: "));
+    //Serial.print(gps_data.latitudeL()/10000000.0, 6);
+    //Serial.print(F(","));
+    //Serial.println(gps_data.longitudeL()/10000000.0, 6);
+  //} else {
+    //Serial.println(F("No GPS"));
+  //}
 
   Serial.print(F("t="));
   Serial.print(temperature, 1);
@@ -333,10 +280,21 @@ void dumpData() {
   Serial.print(humidity, 1);
   Serial.print(F(", v="));
   Serial.print(vcc, 1);
+
 #ifdef WITH_LUX
   Serial.print(F(", lux="));
   Serial.print(lux);
 #endif // WITH_LUX
+  
+#ifdef WITH_SM
+  Serial.print(F("Soil: "));
+  for(int i=0;i<levels;i++){
+    Serial.print(i); 
+    Serial.print(F(" = "));
+    Serial.print(l[i],0);  
+  }
+#endif //WITH_SM
+
   Serial.println();
   Serial.flush();
 }
@@ -585,11 +543,17 @@ uint32_t readLux()
 #endif
 
 #ifdef WITH_SM
-void setSoilMoisture(){
+void BeginSoilMoisture(){
 
   //Start wire connection
   Wire.begin(); // join i2c bus (SDA,SCL)
   Wire.setClock(100000);
+  Wire.setTimeout(1000000); //1 second - check
+  
+}
+
+void EndSoilMoisture(){
+  Wire.end();
 }
 
 void readSoilMoisture(int lev){
@@ -608,16 +572,12 @@ void readSoilMoisture(int lev){
   //start I2C communication
   Wire.beginTransmission(0x04);
   Wire.write(lev);
-  int check=1;
-
-  //extra check if the SDA and SCL lines are high
-  if(digitalRead(A4)==HIGH && digitalRead(A5)==HIGH){
-    check=Wire.endTransmission();
-  }
+  int check=Wire.endTransmission();
   
   if(check==0){
+    
     //Serial.print(F("Ack"));
-    //wait for sensor
+    //wait for sensor to perform the measurement
     delay(10000);
 
     //request measurement result
@@ -649,10 +609,16 @@ void readSoilMoisture(int lev){
     }
   }
   
-  else{
-    //Serial.println(F("Er"));
+  else if(check==5){ //timeout
+    //Serial.println(F("Timeout"));
+    l[lev] = 1;
+    t[lev] = 1;    
+  }
+  
+  else{ //another error
+    //Serial.print(F("Er"));
     l[lev] = 0;
-    t[lev] = 0;    
+    t[lev] = 0; 
   }
 
 }
