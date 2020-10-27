@@ -104,7 +104,7 @@ uint8_t const LED_PIN = 21;
 uint8_t const LUX_HIGH_PIN = 5;
 
 // setup timing variables
-uint32_t const UPDATE_INTERVAL = 900000;
+uint32_t const UPDATE_INTERVAL = 1800000;
 uint32_t const GPS_TIMEOUT = 120000;
 // Update GPS position after transmitting this many updates
 uint16_t const GPS_UPDATE_RATIO = 24*4;
@@ -285,13 +285,16 @@ void dumpData() {
   Serial.print(F(", lux="));
   Serial.print(lux);
 #endif // WITH_LUX
+
+  Serial.println();
   
 #ifdef WITH_SM
-  Serial.print(F("Soil: "));
+  Serial.println(F("Soil: "));
   for(int i=0;i<levels;i++){
     Serial.print(i); 
     Serial.print(F(" = "));
-    Serial.print(l[i],0);  
+    Serial.print(l[i]);
+    Serial.print(F("\n"));  
   }
 #endif //WITH_SM
 
@@ -589,14 +592,15 @@ void readSoilMoisture(int lev){
       i++;
     }
 
-    //assign bytes to values
-    C.b[0]=rec_buf[1];
-    C.b[1]=rec_buf[2];
-    T=rec_buf[3];
-
     //checksum if the expected number of bytes are recieved
     if (i = byte_number) {
       //Serial.print(F("Suc"));
+
+      //assign bytes to values
+      C.b[0]=rec_buf[1];
+      C.b[1]=rec_buf[2];
+      T=rec_buf[3];
+    
       l[lev] = C.i;
       t[lev] = T;      
     }
@@ -611,10 +615,9 @@ void readSoilMoisture(int lev){
   
   else if(check==5){ //timeout
     //Serial.println(F("Timeout"));
-    l[lev] = 1;
-    t[lev] = 1;    
+    l[lev] = 5;
+    t[lev] = 5;    
   }
-  
   else{ //another error
     //Serial.print(F("Er"));
     l[lev] = 0;
