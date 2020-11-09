@@ -23,6 +23,8 @@
 #include <Adafruit_SleepyDog.h>
 #include <avr/power.h>
 #include <util/atomic.h>
+#include <Adafruit_ADS1015.h>
+
 
 #define DEBUG true
 #include "bitstream.h"
@@ -42,33 +44,6 @@ const uint8_t FIRMWARE_VERSION = 255;
 float const BATTERY_DIVIDER_RATIO = 0.0;
 //float const BATTERY_DIVIDER_RATIO = (100.0 + 470.0) / 100.0;
 
-// Enable this define when a light sensor is attached
-//#define WITH_LUX
-
-// Enable this define when a soil moisture sensor is attached
-#define WITH_SM;
-
-// These values define the sensitivity and calibration of the PAR / Lux
-// measurement.
-// R12 Reference resistor for low light levels
-//  (nominal 100K in Platform Rev 2)
-// R11 Reference shunt resistor for high ligh levels
-//  (nominal 10K in platform Rev 2)
-// Value in Ohms
-float const R12 = 100000.0;
-// Value in Ohms
-float const R11 = 10000.0;
-
-// Reverse light current of the foto diode Ea at 1klx
-// uA @ 1000lx  eg 8.9 nA/lx
-// The Reverse dark current (max 30 nA ) is neglectable for our purpose
-float const light_current = 8.9;
-
-// R11 and R12 in parallel
-float const R11_R12 = (R12 * R11) / (R12 + R11);
-float const lx_conv_high = 1.0E6 / (R11_R12 * light_current * 1024.0);
-float const lx_conv_low = 1.0E6 / (R12 * light_current * 1024.0);
-
 // Value in mV (nominal @ 25ºC, Vcc=3.3V)
 // The temperature coefficient of the reference_voltage is neglected
 float const reference_voltage_internal = 1137.0;
@@ -76,25 +51,16 @@ float const reference_voltage_internal = 1137.0;
 // setup GPS module
 uint8_t const GPS_PIN = 8;
 
-// Sensor object
+// Sensor objects
 HTU21D htu;
+Adafruit_ADS1115 ads;
 
-// Most recently read values
+// sensor values
 float temperature;
 float humidity;
-
-//soil moisture - 4 levels and 1 control
-#ifdef WITH_SM
-const int levels=6;
-uint16_t l[levels];
-uint8_t t[levels];
-#endif
-
+uint8_t const ch=1; //load cell
+uint16_t ADS[ch]; //load cell
 uint16_t vcc = 0;
-#ifdef WITH_LUX
-uint32_t lux = 0;
-#endif
-
 int32_t lat24 = 0;
 int32_t lng24 = 0;
 
@@ -127,7 +93,6 @@ enum {
 
 uint32_t lastUpdateTime = 0;
 uint32_t updatesBeforeGpsUpdate = 0;
-gps_fix gps_data;
 
 uint8_t const LORA_PORT = 13;
 
@@ -161,18 +126,7 @@ void loop() {
   // We need to calculate how long we should sleep, so we need to know how long we were awake
   unsigned long startMillis = millis();
 
-  // Activate GPS every now and then to update our position
-  if (updatesBeforeGpsUpdate == 0) {
-    getPosition();
-    updatesBeforeGpsUpdate = GPS_UPDATE_RATIO;
-    // Use the lowest datarate, to maximize range. This helps for
-    // debugging, since range problems can be more easily distinguished
-    // from other problems (lockups, downlink problems, etc).
-    LMIC_setDrTxpow(DR_SF12, 14);
-  } else {
-    LMIC_setDrTxpow(DR_SF9, 14);
-  }
-  updatesBeforeGpsUpdate--;
+  LMIC_setDrTxpow(DR_SF9, 14);
 
   //switch ground pin on
   digitalWrite(SW_GND_PIN, HIGH); 
@@ -184,15 +138,7 @@ void loop() {
   humidity = htu.readHumidity();
   vcc = readVcc();
 
-#ifdef WITH_SM
-  
-  BeginSoilMoisture();
-  for(int i=0;i<levels;i++){
-    readSoilMoisture(i);
-  }
-  EndSoilMoisture();
-
-#endif // WITH_SM
+  readLoadCell();
 
   //switch ground pin off  
   digitalWrite(SW_GND_PIN, LOW); 
@@ -295,54 +241,6 @@ void dumpData() {
   Serial.flush();
 }
 
-void getPosition()
-{
-  // Setup GPS
-  SoftwareSerial gpsSerial(GPS_PIN, GPS_PIN);
-  NMEAGPS gps;
-
-  gpsSerial.begin(9600);
-  memset(&gps_data, 0, sizeof(gps_data));
-  gps.reset();
-  gps.statistics.init();
-
-  digitalWrite(SW_GND_PIN, HIGH);
-
-  // Empty serial input buffer, so only new characters are processed
-  while(Serial.read() >= 0) /* nothing */;
-
-  if (DEBUG)
-    Serial.println(F("Waiting for GPS, send 's' to skip..."));
-
-  unsigned long startTime = millis();
-  uint8_t valid = 0;
-  while (millis() - startTime < GPS_TIMEOUT && valid < 10) {
-    if (gps.available(gpsSerial)) {
-      gps_data = gps.read();
-      if (gps_data.valid.location && gps_data.valid.status && gps_data.status >= gps_fix::STATUS_STD) {
-        valid++;
-        lat24 = int32_t((int64_t)gps_data.latitudeL() * 32768 / 10000000);
-        lng24 = int32_t((int64_t)gps_data.longitudeL() * 32768 / 10000000);
-      } else {
-        lat24 = 0;
-        lng24 = 0;
-      }
-      if (gps_data.valid.satellites) {
-        Serial.print(F("Satellites: "));
-        Serial.println(gps_data.satellites);
-      }
-    }
-    if (DEBUG && tolower(Serial.read()) == 's')
-      break;
-  }
-  digitalWrite(SW_GND_PIN, LOW);
-
-  if (gps.statistics.ok == 0)
-    Serial.println(F("No GPS data received, check wiring"));
-
-  gpsSerial.end();
-}
-
 void queueData() {
   uint8_t length = 12;
   uint8_t flags = 0;
@@ -362,7 +260,7 @@ void queueData() {
   // uncomment a bit of code further down that actually adds the data to
   // the packet, and also shows how the number of bits is counted.
 
-  const uint8_t extra_bits = 6*(EXTRA_SIZE_BITS+16)+6*(EXTRA_SIZE_BITS+8);
+  const uint8_t extra_bits = ch*(EXTRA_SIZE_BITS+16);
   length += (extra_bits + 7)/8;
   flags |= FLAG_WITH_EXTRA;
 
@@ -387,11 +285,6 @@ void queueData() {
   uint8_t vcc8 = (vcc - 1000) / 10;
   packet.append(vcc8, 8);
 
-#ifdef WITH_LUX
-  // Chop off 2 bits to allow up to 256k lux (maximum solar power should be around 128k)
-  packet.append(lux >> 2, 16);
-#endif
-
   if (BATTERY_DIVIDER_RATIO) {
     analogReference(INTERNAL);
     uint16_t reading = analogRead(A0);
@@ -413,13 +306,9 @@ void queueData() {
   
   // This uses some random values, replace these variables by your values.
 
-  // Capacity values 
-  for (int i=0;i<levels;i++){
-      packet.append(16-1, EXTRA_SIZE_BITS);
-      packet.append(l[i], 16);
-      packet.append(8-1, EXTRA_SIZE_BITS);
-      packet.append(t[i], 8);
-  }
+  // LOAD cell values 
+  packet.append(16-1, EXTRA_SIZE_BITS);
+  packet.append(ADS[0], 16);
   
   // Fill any remaining bits (from rounding up to whole bytes) with 1's,
   // so they cannot be a valid field.
@@ -429,7 +318,7 @@ void queueData() {
   LMIC_setTxData2(LORA_PORT, packet.data(), packet.byte_size(), 0);
   if (DEBUG)
   {
-    Serial.println(F("Packet queued"));
+    Serial.println(F("que"));
     uint8_t *data = packet.data();
     for (int i = 0; i < packet.byte_size(); i++)
     {
@@ -469,161 +358,37 @@ uint16_t readVcc()
   return result; // Vcc in millivolts
 }
 
-#ifdef WITH_LUX
-uint32_t readLux()
-{
-  uint32_t result = 0;
-  uint8_t range = 0;
+void readLoadCell(){
 
-  // Set the Reference Resistor to just R12
-  pinMode(LUX_HIGH_PIN, INPUT);
-  // Read the value of Analog input 2 against the internal reference
-  analogReference(INTERNAL);
-  // Throw away the first reference, in case the internal reference
-  // still needs to start up and stabilize (datasheet recommendation)
-  analogRead(A2);
-  uint16_t raw_adc = analogRead(A2);
-  // Check if read_low has an overflow
-  if (raw_adc < 1000)
-  {
-    result = uint32_t(lx_conv_low * reference_voltage_internal * raw_adc);
-    range = 1;
-  } else {
-    // Set the Reference Resistor to R11 parallel with R12 for more range
-    pinMode(LUX_HIGH_PIN, OUTPUT);
-    digitalWrite(LUX_HIGH_PIN, LOW);
-
-    // An external capacitor can be added to charge the ADC internal 14pF
-    // without dropping significant voltage, improving read values at low
-    // values. If the capacitance is 1000x as big as the internal
-    // capacitance, the drop should be limited to 1 ADC value, so 10nF
-    // should be fine, but in practice still shows ±50 ADC counts of
-    // deviation. Using 100nF reduces this to ±15, so we're using that.
-    // Possible there are more sources of noise than just the internal
-    // capacitance.
-    //
-    // When switching from R12 to R11+R12, the capacitor has to charge
-    // through R11+R12, which has an RC time of 100nF x 9k = 900μs. To be
-    // sure, we wait for 3ms.
-    delay(3);
-
-    raw_adc = analogRead(A2);
-    // Check if read_high has an overflow
-    if (raw_adc < 1000)
-    {
-      result = uint32_t(lx_conv_high * reference_voltage_internal * raw_adc);
-      range = 2;
-    } else {
-      // Read the value of Analog input 2 against VCC for more range
-      analogReference(DEFAULT);
-      raw_adc = analogRead(A2);
-      result = uint32_t(lx_conv_high * vcc * raw_adc);
-      range = 3;
-    }
-  }
-
-  // Set the Reference Resistor to 100K to draw the least current
-  pinMode(LUX_HIGH_PIN, INPUT);
-  if (DEBUG)
-  {
-    Serial.print(F("Lux_reading : "));
-    Serial.print(result);
-    Serial.print(F(" lx, range="));
-    Serial.print(range);
-    Serial.print(F(", adc="));
-    Serial.println(raw_adc);
-  }
-  return result;
-}
-
-#endif
-
-#ifdef WITH_SM
-void BeginSoilMoisture(){
-
-  //Start wire connection
-  Wire.begin(); // join i2c bus (SDA,SCL)
-  Wire.setClock(100000);
-  Wire.setWireTimeout(WIRE_TIMEOUT); //1 second - check
+  //Start I2C communicatrion
   
-}
+  Wire.begin();
+  Wire.setClock(100000);
+  Wire.setWireTimeout(WIRE_TIMEOUT);
 
-void EndSoilMoisture(){
-  Wire.end();
-}
+  ads.setGain(GAIN_SIXTEEN);
 
-void readSoilMoisture(int lev){
-
-  //bytes that are expected
-  const int byte_number = 4;
-  uint8_t rec_buf[byte_number];
-
-  union {
-    uint8_t b[2];
-    uint16_t i;
-  } C;
-
-  uint8_t T;
-
-  //start I2C communication
-  Wire.beginTransmission(0x04);
-  Wire.write(lev);
+  //check if device is found
+  Wire.beginTransmission(0x048);
   int check=Wire.endTransmission();
   
   if(check==0){
     
-    //Serial.print(F("Ack"));
-    //wait for sensor to perform the measurement
-    delay(SOIL_DELAY);
-
-    //request measurement result
-    Wire.requestFrom(0x04, byte_number, true); // request 1 byte from slave device address 4
-
-    int i = 0;
-    while (Wire.available()) {
-      rec_buf[i]=Wire.read();
-      i++;
-    }
-
-    //checksum if the expected number of bytes are recieved
-    if (i = byte_number) {
-      //Serial.print(F("Suc"));
-
-      //assign bytes to values
-      C.b[0]=rec_buf[1];
-      C.b[1]=rec_buf[2];
-      T=rec_buf[3];
+    ADS[0]=ads.readADC_Differential_0_1()+20;
     
-      l[lev] = C.i;
-      t[lev] = T;      
-    }
-    
-    else {
-      //invalid number of bytes recievd or no data
-      //Serial.print(F("Er"));
-      l[lev] = 0;
-      t[lev] = 0;
-    }
   }
   
   else if(check==5){ //timeout
     //Serial.println(F("Timeout"));
-    l[lev] = 5;
-    t[lev] = 5;    
+    ADS[0]=5;  
   }
   else{ //another error
-    //Serial.print(F("Er"));
-    l[lev] = 0;
-    t[lev] = 0; 
+    ADS[0]=0;  
   }
 
   if(DEBUG){
-    Serial.print(lev); 
-    Serial.print(F(" = "));
-    Serial.print(l[lev]);
-    Serial.print(F("\n"));  
+    Serial.println(F("ADC:"));
+    Serial.println(ADS[0]);
   }
 
 }
-
-#endif
