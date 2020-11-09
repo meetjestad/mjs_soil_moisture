@@ -1,6 +1,25 @@
 Electronic schematic & PCB design
 =================================
 
-Designed in KiCad version 5.1.6
+PCB was designed in KiCad version 5.1.6
 
-R5,R9,R10,R6,R7 and R8 are not actual resistors, but are used as bridges to minimize capacitance between the trace comming from the capacitors and other traces (S0,S1,S2, E from the multiplexer, GND and 3V lines) 
+List of components:
+
+U1 = Microcontroller ATTINY84-20PU
+U2 = Schmitt trigger SN74HC14
+U3 = LDO MCP1700-250
+U4 = Multiplexer 74HC5051
+U5 = Multiplexer 74HC5051
+U6 = Multiplexer 74HC5051
+C1 = 100nF
+C2 = 10uF
+C3 = 39pF +/- 1%
+C4 = 47pF
+R1 = 3.3k
+R2 = 3.3k
+R3 = 1M +/- 0.1%
+R4 = 5.6k
+Thermistor_NTC = NTCLE305E4502SB 
+
+
+
