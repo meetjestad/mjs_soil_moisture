@@ -1,5 +1,6 @@
   /*******************************************************************************
-   Copyright (c) 2016 Thomas Telkamp, Matthijs Kooijman, Bas Peschier, Harmen Zijp
+   Forked from original mjs_firmware: Copyright (c) 2016 Thomas Telkamp, Matthijs Kooijman, Bas Peschier, Harmen Zijp
+   Code for measuring soil moisture added by Paul Brouwer
 
    Permission is hereby granted, free of charge, to anyone
    obtaining a copy of this document and accompanying files,
@@ -104,7 +105,7 @@ uint8_t const LED_PIN = 21;
 uint8_t const LUX_HIGH_PIN = 5;
 
 // setup timing variables
-uint32_t const UPDATE_INTERVAL = 900000; //30m
+uint32_t const UPDATE_INTERVAL = 1800000; //30m
 uint32_t const GPS_TIMEOUT = 120000; //2m
 uint32_t const WIRE_TIMEOUT = 1000000; //microseconds
 uint32_t const SWG_GND_DELAY=2000; //milliseconds
