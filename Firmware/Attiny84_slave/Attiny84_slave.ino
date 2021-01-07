@@ -34,7 +34,6 @@ struct level{
   int S0;
   int S1;
   int S2;
-  int E;
 };
 
 struct level L[num];
@@ -50,43 +49,37 @@ uint8_t T;
 int S0=7;
 int S1=9;
 int S2=10;
-int E=3;
 int NTC_L=1;
 int NTC_H=0;
 int NTC_I=A2;
+int VCC=A3;
 int F_OUT=8;
 
 //multiplexer settings
 void setMult(){
-  L[0].S0=1; // A7 = 1 = Not connected
+  L[0].S0=0; // A6 = 2 = Not connected
   L[0].S1=1;
   L[0].S2=1;
-  L[0].E=0;
   
   L[1].S0=0; // A4 = 1 = Reference
   L[1].S1=0;
   L[1].S2=1;
-  L[1].E=0;
   
   L[2].S0=0; // A2 = 15 = L1
   L[2].S1=1;
   L[2].S2=0;
-  L[2].E=0;
   
   L[3].S0=1; // A1 = 14 = L2
   L[3].S1=0;
   L[3].S2=0;
-  L[3].E=0;
 
   L[4].S0=0; // A0 = 13 = L3
   L[4].S1=0;
   L[4].S2=0;
-  L[4].E=0;
 
   L[5].S0=1;  //A3 = 12 = L4
   L[5].S1=1;
   L[5].S2=0;
-  L[5].E=0;
 
 }
 
@@ -128,7 +121,7 @@ uint16_t NTC_temp(int tsample){
   //set to output
   pinMode(NTC_L, OUTPUT); 
   pinMode(NTC_H, OUTPUT); 
-  delay(100);
+  delay(100);  
   digitalWrite(NTC_L, LOW);
   digitalWrite(NTC_H, HIGH);
   delay(100);
@@ -156,7 +149,6 @@ void measure_loop(){
   digitalWrite(S0,L[reg].S0);
   digitalWrite(S1,L[reg].S1);
   digitalWrite(S2,L[reg].S2);
-  digitalWrite(E,L[reg].E);
 
   //Switching delay
   delay(100);
@@ -198,10 +190,9 @@ void measure_loop(){
   }
 
   //multiplexer disabled
-  digitalWrite(S0,LOW);
-  digitalWrite(S1,LOW);
-  digitalWrite(S2,LOW);
-  digitalWrite(E,HIGH);
+  digitalWrite(S0,HIGH);
+  digitalWrite(S1,HIGH);
+  digitalWrite(S2,HIGH);
 }
 
 void setup(){
@@ -210,17 +201,16 @@ void setup(){
   pinMode(S0, OUTPUT);
   pinMode(S1, OUTPUT);
   pinMode(S2, OUTPUT);
-  pinMode(E, OUTPUT);
 
   pinMode(NTC_L, INPUT); // floating
   pinMode(NTC_H, INPUT); // floating
   pinMode(NTC_I, INPUT); // actual input
+  pinMode(VCC, INPUT); // actual input
 
   //multiplexer disabled
-  digitalWrite(S0,LOW);
-  digitalWrite(S1,LOW);
-  digitalWrite(S2,LOW);
-  digitalWrite(E,HIGH);
+  digitalWrite(S0,HIGH);
+  digitalWrite(S1,HIGH);
+  digitalWrite(S2,HIGH);
 
   //set the multiplexer values
   setMult();
@@ -257,7 +247,14 @@ void requestEvent(){
     TinyWireS.send(reg);
     TinyWireS.send(C.b[0]);
     TinyWireS.send(C.b[1]);
-    TinyWireS.send(T);
+
+    //for NC send the value of VCC / 4
+    if(reg!=0){
+      TinyWireS.send(T);
+    }
+    else{
+      TinyWireS.send((uint8_t)(VCC_read(10)/4));
+    }
 }
 
 void recieveEvent(){
@@ -273,9 +270,8 @@ void recieveEvent(){
 
 uint8_t calc_temp(uint16_t Tint){
 
-  //ADC values
-  float Vcc = 3.3;
-  float steps = 1024;
+  //VCC calue
+  uint16_t VCCint = VCC_read(10);
 
   //NTC parameters
   float r0=100000;
@@ -283,12 +279,25 @@ uint8_t calc_temp(uint16_t Tint){
   float r_ref=125000; //adjust
   float beta=4036;
 
-  float Tv=(Vcc/steps)*Tint;
-  float Tr=(Vcc-Tv)/(Tv/r_ref);
+  float Tv=Tint/VCCint;
+  float Tr=(1-Tv)/(Tv/r_ref);
   float Tc=1/(log(Tr/r0)/beta+1/T0)-273;
 
   uint8_t Traw = (Tc+20)*4;
 
   return Traw;
 
+}
+
+uint16_t VCC_read(int tsample){
+  
+  //measurement
+  int VCC_sum=0;
+  int t=0;
+  while(t<tsample){
+    VCC_sum+=analogRead(VCC);
+    t=t+1; 
+  }
+
+  return VCC_sum/t;  
 }
