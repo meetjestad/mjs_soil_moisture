@@ -4,7 +4,7 @@
 //Clock speed = 8mhz
 //Programmer = Arduino as ISP
 
-// VERSION = V2.1 
+// VERSION = V2.3
 
 #define I2C_SLAVE_ADDRESS 0x4 // Address of the slave
  
@@ -19,6 +19,7 @@ unsigned long interval = 10000;
 float C_raw_freq[samples];
 float k = 1;
 float R=1000000; //Mohm
+uint8_t Vcc;
 
 //for the I2C data transfer
 uint8_t reg=0;
@@ -189,6 +190,10 @@ void measure_loop(){
     C_raw_freq[i]=0;
   }
 
+  //calculate the sensor voltage
+  uint16_t Vcc_send=VCC_read(10)/4;
+  Vcc=Vcc_send;
+
   //multiplexer disabled
   digitalWrite(S0,HIGH);
   digitalWrite(S1,HIGH);
@@ -253,7 +258,7 @@ void requestEvent(){
       TinyWireS.send(T);
     }
     else{
-      TinyWireS.send((uint8_t)(VCC_read(10)/4));
+      TinyWireS.send(Vcc);
     }
 }
 
@@ -279,8 +284,8 @@ uint8_t calc_temp(uint16_t Tint){
   float r_ref=125000; //adjust
   float beta=4036;
 
-  float Tv=Tint/VCCint;
-  float Tr=(1-Tv)/(Tv/r_ref);
+  float Tv=float(Tint)/float(VCCint);
+  float Tr=r_ref*(1-Tv)/Tv;
   float Tc=1/(log(Tr/r0)/beta+1/T0)-273;
 
   uint8_t Traw = (Tc+20)*4;
@@ -292,8 +297,9 @@ uint8_t calc_temp(uint16_t Tint){
 uint16_t VCC_read(int tsample){
   
   //measurement
-  int VCC_sum=0;
-  int t=0;
+  uint16_t VCC_sum=0;
+  uint16_t t=0;
+  
   while(t<tsample){
     VCC_sum+=analogRead(VCC);
     t=t+1; 
