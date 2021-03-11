@@ -4,25 +4,28 @@
 //Clock speed = 8mhz
 //Programmer = Arduino as ISP
 
-// VERSION = V2.3
+// VERSION = Fex_V0 : for use on older PCBs
 
-#define I2C_SLAVE_ADDRESS 0x4 // Address of the slave
- 
-#include <TinyWireS.h>
+#include <SoftwareSerial.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-//measurement 
-const int samples=50;
-const int num=6; //4 levels, 1x NC and 1x reference
-unsigned long interval = 10000;
-float C_raw_freq[samples];
-float k = 1;
-float R=1000000; //Mohm
-uint8_t Vcc;
+#define RX 4 //check SCL
+#define TX 5 //check SDA
 
-//for the I2C data transfer
+SoftwareSerial Vserial(RX,TX);
+
+//fixed measurement parameters
+const uint8_t samples=10;
+const uint8_t num=6; //4 levels, 1x NC and 1x reference
+const unsigned long interval = 100000; //us
+const uint8_t R=1; //Mohm
+
+//measurement variables
+float C_raw_freq[samples];
 uint8_t reg=0;
+int t=0; 
+uint8_t checksum=0;
 
 //for interrupt
 volatile long pulseCount; 
@@ -39,12 +42,8 @@ struct level{
 
 struct level L[num];
 
-union{
-  uint16_t i;
-  unsigned char b[2];
-} C;
-
-uint8_t T;
+uint16_t RF[num];
+uint8_t T[num];
 
 //pin declaration
 int S0=7;
@@ -53,7 +52,6 @@ int S2=10;
 int NTC_L=1;
 int NTC_H=0;
 int NTC_I=A2;
-int VCC=A3;
 int F_OUT=8;
 
 //multiplexer settings
@@ -166,9 +164,9 @@ void measure_loop(){
 
       true_interval=micros() - lastReportTime;
       
-      // record the amount of pulses
+      // record the amount of pulses (corrected for true interval
       pulseOn=false;
-      C_raw_freq[c]=1000000*pulseCount/true_interval;
+      C_raw_freq[c]=float(pulseCount)*1000000.0/float(true_interval);
       c++;
 
       //restart
@@ -181,18 +179,13 @@ void measure_loop(){
   //calcultae result
   pulseOn=false;
 
-  //calculate and store frequency data 
-  C.i=pow(10,15)/(array_mean(C_raw_freq)*R);
-  T=calc_temp(NTC_temp(10)); //10=number of samples
+  RF[reg]=array_mean(C_raw_freq)*R; //frequency*R
+  T[reg]=calc_temp(NTC_temp(10)); //10=number of samples
 
   //reset the array
   for(int i=0; i<samples;i++){
     C_raw_freq[i]=0;
   }
-
-  //calculate the sensor voltage
-  uint16_t Vcc_send=VCC_read(10)/4;
-  Vcc=Vcc_send;
 
   //multiplexer disabled
   digitalWrite(S0,HIGH);
@@ -202,32 +195,30 @@ void measure_loop(){
 
 void setup(){
 
-  //Set the pins
+  //TX HIGH
+  pinMode(TX, OUTPUT);
+  digitalWrite(TX,HIGH);
+  
+  //Set multiplexer pins
   pinMode(S0, OUTPUT);
   pinMode(S1, OUTPUT);
   pinMode(S2, OUTPUT);
-
-  pinMode(NTC_L, INPUT); // floating
-  pinMode(NTC_H, INPUT); // floating
-  pinMode(NTC_I, INPUT); // actual input
-  pinMode(VCC, INPUT); // actual input
-
-  //multiplexer disabled
   digitalWrite(S0,HIGH);
   digitalWrite(S1,HIGH);
   digitalWrite(S2,HIGH);
 
+  //set NTC pins
+  pinMode(NTC_L, INPUT); // floating
+  pinMode(NTC_H, INPUT); // floating
+  pinMode(NTC_I, INPUT); // actual input
+ 
+  delay(500);  //time for F_OUT to stabalize
+
   //set the multiplexer values
   setMult();
-    
-  // start I2C
-  TinyWireS.begin(I2C_SLAVE_ADDRESS); // join i2c network
-  TinyWireS.onRequest(requestEvent);
-  TinyWireS.onReceive(recieveEvent);
 
   //do not start counting pulses yet
   pulseOn=false;
-
 
   //attach interrupt //Taken from https://forum.arduino.cc/index.php?topic=427955.0
   // Interrupt on INT0 working, on PCIE1 interferes with SDA and SCL
@@ -237,46 +228,74 @@ void setup(){
   MCUCR |= (1<<ISC01)|(1<<ISC00); // set fire condition: rising edge
   pinMode(8, INPUT_PULLUP); //stabalize the pin
   sei();
+
+  //------------------MEASURE--------------------
+  
+  //In setup, so that the loop is only attempting 
+  //to send the data over TTL-UART
+  
+  for(int n=0;n<num;n++){
+    reg=n;
+    measure_loop();
+  }
+
+  delay(500); //time for F_OUT to stabalize
  
 }
 
 void loop(){
-    // This needs to be here
-    TinyWireS_stop_check();
-}
 
-// Gets called when the ATtiny receives an i2c request
-void requestEvent(){
-    
-    //send the register
-    TinyWireS.send(reg);
-    TinyWireS.send(C.b[0]);
-    TinyWireS.send(C.b[1]);
+  //start serial connection
+  Vserial.begin(9600);
 
-    //for NC send the value of VCC / 4
-    if(reg!=0){
-      TinyWireS.send(T);
-    }
-    else{
-      TinyWireS.send(Vcc);
-    }
-}
-
-void recieveEvent(){
-  
-  while(TinyWireS.available()){
-    reg=TinyWireS.receive();
+  t=0;
+  while(!Vserial && t<100){
+    delay(100);
+    t++;
   }
-
-  //perform measurement for this level
-  measure_loop();
+   
+ if(t<=100){
   
+   checksum=0;
+   for(int n=0;n<num;n++){
+     uint8_t* RF_byte= (uint8_t*)&RF[n];
+     Vserial.write(RF_byte[0]);
+     Vserial.write(RF_byte[1]);
+     Vserial.write(T[n]);
+     checksum+=RF_byte[0]+RF_byte[1]+T[n];
+   }
+
+   //send the measurement resolution and sample size
+   Vserial.write(samples);
+   checksum=checksum+samples;
+
+   //send the checksum
+   Vserial.write(checksum);
+   delay(400);
+}
+else{
+   for(int n=0;n<num;n++){
+     Vserial.write(10);
+     Vserial.write(10);
+     Vserial.write(10);
+     checksum=checksum+30;
+   }
+
+   //send the measurement resolution and sample size
+   Vserial.write(samples);
+   checksum=checksum+samples;
+
+   //send the checksum
+   Vserial.write(checksum);
+   delay(400);
+}
 }
 
 uint8_t calc_temp(uint16_t Tint){
 
-  //VCC calue
-  uint16_t VCCint = VCC_read(10);
+  //ADC values
+  float Vcc = 2.5;
+  float steps = 1024;
 
   //NTC parameters
   float r0=100000;
@@ -284,26 +303,12 @@ uint8_t calc_temp(uint16_t Tint){
   float r_ref=125000; //adjust
   float beta=4036;
 
-  float Tv=float(Tint)/float(VCCint);
-  float Tr=r_ref*(1-Tv)/Tv;
+  float Tv=(Vcc/steps)*Tint;
+  float Tr=(Vcc-Tv)/(Tv/r_ref);
   float Tc=1/(log(Tr/r0)/beta+1/T0)-273;
 
   uint8_t Traw = (Tc+20)*4;
 
   return Traw;
 
-}
-
-uint16_t VCC_read(int tsample){
-  
-  //measurement
-  uint16_t VCC_sum=0;
-  uint16_t t=0;
-  
-  while(t<tsample){
-    VCC_sum+=analogRead(VCC);
-    t=t+1; 
-  }
-
-  return VCC_sum/t;  
 }

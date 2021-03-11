@@ -15,6 +15,9 @@
    - lmic (mjs-specific fork): https://github.com/meetjestad/arduino-lmic
  *******************************************************************************/
 
+//Version flex V0: this version is used to implement the TTL-UART on V2 soil moisture sensors
+
+
 // include external libraries
 #include <SPI.h>
 #include <Wire.h>
@@ -86,9 +89,14 @@ float humidity;
 
 //soil moisture - 4 levels and 1 control
 #ifdef WITH_SM
+uint8_t const RX_PIN = 7; 
+uint8_t const TX_PIN = 6; 
+SoftwareSerial Vserial(RX_PIN,TX_PIN);
+
 const int levels=6;
 uint16_t l[levels];
 uint8_t t[levels];
+uint8_t samples;
 #endif
 
 uint16_t vcc = 0;
@@ -109,7 +117,8 @@ uint32_t const UPDATE_INTERVAL = 1800000; //30m
 uint32_t const GPS_TIMEOUT = 120000; //2m
 uint32_t const WIRE_TIMEOUT = 1000000; //microseconds
 uint32_t const SWG_GND_DELAY=2000; //milliseconds
-uint32_t const SOIL_DELAY=10000; //milliseconds
+uint32_t const SOIL_DELAY=6000; //milliseconds (8000-2000 for SWG_GND)
+long const TTL_timeout=8000; //ms
 
 // Update GPS position after transmitting this many updates
 uint16_t const GPS_UPDATE_RATIO = 24*4;
@@ -179,19 +188,28 @@ void loop() {
   digitalWrite(SW_GND_PIN, HIGH); 
   delay(SWG_GND_DELAY); //time for sensor to start-up
   
-  // Activate and read our sensorss
+  // Activate and read our I2C sensor
   htu.begin(); //includes a wire.begin in the sparfun library moved here from setup
   temperature = htu.readTemperature();
   humidity = htu.readHumidity();
   vcc = readVcc();
+  Wire.end(); // to enable SDA & SCL to be used by Vserial
 
 #ifdef WITH_SM
+  delay(SOIL_DELAY);
   
-  BeginSoilMoisture();
-  for(int i=0;i<levels;i++){
-    readSoilMoisture(i);
+  if(beginSoilMoisture()){
+    readSoilMoisture();
   }
-  EndSoilMoisture();
+  else{
+    //set values to zero
+    for(int lev=0;lev<levels;lev++){
+      l[lev]=0;
+      t[lev]=0;
+    }
+  }
+  
+  endSoilMoisture();
 
 #endif // WITH_SM
 
@@ -282,15 +300,28 @@ void dumpData() {
 
   Serial.print(F("t="));
   Serial.print(temperature, 1);
-  Serial.print(F(", h="));
-  Serial.print(humidity, 1);
-  Serial.print(F(", v="));
-  Serial.print(vcc, 1);
+  //Serial.print(F(", h="));
+  //Serial.print(humidity, 1);
+  //Serial.print(F(", v="));
+  //Serial.print(vcc, 1);
+
 
 #ifdef WITH_LUX
   Serial.print(F(", lux="));
   Serial.print(lux);
 #endif // WITH_LUX
+
+
+#ifdef WITH_SM
+  for(int lev=0;lev<levels;lev++){;
+    Serial.print(lev);
+    Serial.print(F(" = "));
+    Serial.print(l[lev]);
+    Serial.print(F(" | "));
+    Serial.print(t[lev]);
+    Serial.print(F("\n"));
+  }
+#endif // WITH_SM
 
   Serial.println();
   Serial.flush();
@@ -540,91 +571,122 @@ uint32_t readLux()
 #endif
 
 #ifdef WITH_SM
-void BeginSoilMoisture(){
+bool beginSoilMoisture(){
 
-  //Start wire connection
-  Wire.begin(); // join i2c bus (SDA,SCL)
-  Wire.setClock(100000);
-  Wire.setWireTimeout(WIRE_TIMEOUT); //1 second - check
+  //Start virtual serial connection
+  Vserial.begin(9600);
+
+  //wait for Vserial with a timeout of 1 second
+  int c=0;
+  while(!Vserial && c<100){
+    delay(10);
+    c++;
+  }
+
+  if(c>=100){
+    return false;
+  }
+  else 
+    return true;
   
 }
 
-void EndSoilMoisture(){
-  Wire.end();
+void endSoilMoisture(){
+  Vserial.end();
 }
 
-void readSoilMoisture(int lev){
+void readSoilMoisture(){
 
   //bytes that are expected
-  const int byte_number = 4;
-  uint8_t rec_buf[byte_number];
+  const int byte_num = 19;
+  uint8_t rec_buffer[byte_num+1];
 
-  union {
+  union { //just used to convert uint16_t to uint8_t, this could be done more elegantly
     uint8_t b[2];
     uint16_t i;
   } C;
 
-  uint8_t T;
+  //time-out parameters
+  bool succeed=false;
+  long TTL_time=0;
+  long start_time=millis();
+  uint8_t checksum_slave;
+  uint8_t checksum_master;
 
-  //start I2C communication
-  Wire.beginTransmission(0x04);
-  Wire.write(lev);
-  int check=Wire.endTransmission();
+  while(!succeed){
+    // put your main code here, to run repeatedly:
+    Vserial.listen();
+    
+    int n=0;  
+    while(Vserial.available()>0){
+      rec_buffer[n]=Vserial.read();
+      n++;
+    }
+    delay(100); //nodig anders gaat t niet goed om  een reden
+    
+    //collect data
+    if(n>0){
+
+      Serial.println(n);
   
-  if(check==0){
-    
-    //Serial.print(F("Ack"));
-    //wait for sensor to perform the measurement
-    delay(SOIL_DELAY);
-
-    //request measurement result
-    Wire.requestFrom(0x04, byte_number, true); // request 1 byte from slave device address 4
-
-    int i = 0;
-    while (Wire.available()) {
-      rec_buf[i]=Wire.read();
-      i++;
-    }
-
-    //checksum if the expected number of bytes are recieved
-    if (i = byte_number) {
-      //Serial.print(F("Suc"));
-
-      //assign bytes to values
-      C.b[0]=rec_buf[1];
-      C.b[1]=rec_buf[2];
-      T=rec_buf[3];
-    
-      l[lev] = C.i;
-      t[lev] = T;      
-    }
-    
-    else {
-      //invalid number of bytes recievd or no data
-      //Serial.print(F("Er"));
-      l[lev] = 0;
-      t[lev] = 0;
-    }
-  }
+      //if number of bytes match
+      if(n==byte_num+1){
   
-  else if(check==5){ //timeout
-    //Serial.println(F("Timeout"));
-    l[lev] = 5;
-    t[lev] = 5;    
-  }
-  else{ //another error
-    //Serial.print(F("Er"));
-    l[lev] = 0;
-    t[lev] = 0; 
-  }
+        //calculate the checksum
+        checksum_slave=rec_buffer[byte_num];
+        checksum_master=0;
+        
+        for(int i=0;i<byte_num;i++){
+          checksum_master+=rec_buffer[i];
+  
+          //print all bytes
+          //Serial.print(i);
+          //Serial.print(F(" : "));
+          //Serial.print(rec_buffer[i]);
+          //Serial.print(F("\n"));
+        }
 
-  if(DEBUG){
-    Serial.print(lev); 
-    Serial.print(F(" = "));
-    Serial.print(l[lev]);
-    Serial.print(F("\n"));  
-  }
+        samples=rec_buffer[byte_num-1];
 
-}
+        //set success
+        if(checksum_master==checksum_slave){
+          succeed=true;
 
+          for(int lev=0;lev<levels;lev++){
+            C.b[0]=rec_buffer[3*lev];
+            C.b[1]=rec_buffer[3*lev+1];
+            l[lev]=float(pow(10,8))/float(C.i); // 10nF
+            t[lev]=rec_buffer[3*lev+2];
+          }
+        
+         }
+      } //if n==byte_num
+      
+    } //if n>0
+
+    //cause a time-out after period x
+    if(!succeed){
+      TTL_time=millis()-start_time;
+    }
+    
+    if(TTL_time>TTL_timeout){
+      succeed=true;
+      Serial.print(F("Time-out"));
+
+      //set values to zero
+      for(int lev=0;lev<levels;lev++){
+        l[lev]=0;
+        t[lev]=0;
+      }
+    }
+
+  } //while loop
+
+  if(TTL_time<TTL_timeout){
+    Serial.print(F("success, time: "));
+  } 
+  Serial.print(TTL_time);
+  Serial.print("\n");
+
+} //readSoilMoisture
 #endif
