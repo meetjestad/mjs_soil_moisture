@@ -216,7 +216,7 @@ F 3 "~" H 6600 5100 50  0001 C CNN
 	1    6600 5100
 	1    0    0    -1  
 $EndComp
-Text GLabel 10200 2850 3    50   Input ~ 0
+Text GLabel 10250 2500 3    50   Input ~ 0
 NTC_H
 Wire Wire Line
 	2900 5800 2900 5900
@@ -594,54 +594,54 @@ NTC_A3
 $Comp
 L Connector:Conn_01x08_Female J4
 U 1 1 6044449B
-P 10200 2000
-F 0 "J4" V 10350 2400 50  0000 L CNN
-F 1 "Conn_01x08_Female" V 10350 1550 50  0000 L CNN
-F 2 "Connector_PinHeader_1.00mm:PinHeader_1x08_P1.00mm_Vertical" H 10200 2000 50  0001 C CNN
-F 3 "~" H 10200 2000 50  0001 C CNN
-	1    10200 2000
+P 10250 1650
+F 0 "J4" V 10400 2050 50  0000 L CNN
+F 1 "Conn_01x08_Female" V 10400 1200 50  0000 L CNN
+F 2 "Connector_PinHeader_1.00mm:PinHeader_1x08_P1.00mm_Vertical" H 10250 1650 50  0001 C CNN
+F 3 "~" H 10250 1650 50  0001 C CNN
+	1    10250 1650
 	0    -1   -1   0   
 $EndComp
 $Comp
 L Connector:Conn_01x08_Female J3
 U 1 1 60445292
-P 10100 2650
-F 0 "J3" V 9500 2800 50  0000 L CNN
-F 1 "Conn_01x08_Female" V 9500 2000 50  0000 L CNN
-F 2 "Connector_PinHeader_1.00mm:PinHeader_1x08_P1.00mm_Vertical" H 10100 2650 50  0001 C CNN
-F 3 "~" H 10100 2650 50  0001 C CNN
-	1    10100 2650
+P 10150 2300
+F 0 "J3" V 9550 2450 50  0000 L CNN
+F 1 "Conn_01x08_Female" V 9550 1650 50  0000 L CNN
+F 2 "Connector_PinHeader_1.00mm:PinHeader_1x08_P1.00mm_Vertical" H 10150 2300 50  0001 C CNN
+F 3 "~" H 10150 2300 50  0001 C CNN
+	1    10150 2300
 	0    -1   -1   0   
 $EndComp
-Text GLabel 10500 2850 3    50   Input ~ 0
+Text GLabel 10550 2500 3    50   Input ~ 0
 C1_A0
-Text GLabel 10600 2200 3    50   Input ~ 0
+Text GLabel 10650 1850 3    50   Input ~ 0
 C1_A1
-Text GLabel 10500 2200 3    50   Input ~ 0
+Text GLabel 10550 1850 3    50   Input ~ 0
 C1_A2
-Text GLabel 10400 2850 3    50   Input ~ 0
+Text GLabel 10450 2500 3    50   Input ~ 0
 C1_A3
-Text GLabel 10000 2200 3    50   Input ~ 0
+Text GLabel 10050 1850 3    50   Input ~ 0
 C0_A3
-Text GLabel 9900 2200 3    50   Input ~ 0
+Text GLabel 9950 1850 3    50   Input ~ 0
 C0_A0
-Text GLabel 9800 2850 3    50   Input ~ 0
+Text GLabel 9850 2500 3    50   Input ~ 0
 C0_A1
-Text GLabel 9900 2850 3    50   Input ~ 0
+Text GLabel 9950 2500 3    50   Input ~ 0
 C0_A2
-Text GLabel 10100 2850 3    50   Input ~ 0
+Text GLabel 10150 2500 3    50   Input ~ 0
 NTC_A0
-Text GLabel 10200 2200 3    50   Input ~ 0
+Text GLabel 10250 1850 3    50   Input ~ 0
 NTC_A1
-Text GLabel 10100 2200 3    50   Input ~ 0
+Text GLabel 10150 1850 3    50   Input ~ 0
 NTC_A2
-Text GLabel 10000 2850 3    50   Input ~ 0
+Text GLabel 10050 2500 3    50   Input ~ 0
 NTC_A3
-Text GLabel 10300 2850 3    50   Input ~ 0
+Text GLabel 10350 2500 3    50   Input ~ 0
 NTC_H
-Text GLabel 10300 2200 3    50   Input ~ 0
+Text GLabel 10350 1850 3    50   Input ~ 0
 NTC_H
-Text GLabel 10400 2200 3    50   Input ~ 0
+Text GLabel 10450 1850 3    50   Input ~ 0
 NTC_H
 $Comp
 L power:+2V5 #PWR0101
@@ -971,40 +971,12 @@ F 3 "" H 1750 5800 50  0001 C CNN
 	0    1    1    0   
 $EndComp
 Wire Wire Line
-	4150 5650 4250 5650
-$Comp
-L Connector_Generic:Conn_01x03 J2
-U 1 1 60A878E0
-P 3950 5650
-F 0 "J2" V 3914 5462 50  0000 R CNN
-F 1 "Conn_01x03" V 4100 5950 50  0000 R CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical" H 3950 5650 50  0001 C CNN
-F 3 "~" H 3950 5650 50  0001 C CNN
-	1    3950 5650
-	-1   0    0    1   
-$EndComp
-Wire Wire Line
 	4250 5650 4250 6150
 Connection ~ 4250 5650
 Wire Wire Line
 	4150 5750 4150 6650
 Text GLabel 4700 5550 2    50   Input ~ 0
 POW_TX
-$Comp
-L Connector_Generic:Conn_01x02 J5
-U 1 1 60A9A53A
-P 4500 5850
-F 0 "J5" V 4464 5662 50  0000 R CNN
-F 1 "Conn_01x02" V 4500 6400 50  0000 R CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical" H 4500 5850 50  0001 C CNN
-F 3 "~" H 4500 5850 50  0001 C CNN
-	1    4500 5850
-	0    1    1    0   
-$EndComp
-Wire Wire Line
-	4150 5550 4500 5550
-Wire Wire Line
-	4500 5650 4500 5550
 Connection ~ 4500 5550
 Wire Wire Line
 	4500 5550 4700 5550
@@ -1049,4 +1021,32 @@ Wire Wire Line
 Connection ~ 2800 2400
 Wire Wire Line
 	2800 2400 2900 2400
+Wire Wire Line
+	4500 5650 4500 5550
+Wire Wire Line
+	4150 5650 4250 5650
+Wire Wire Line
+	4150 5550 4500 5550
+$Comp
+L Connector_Generic:Conn_01x02 J5
+U 1 1 60A9A53A
+P 4500 5850
+F 0 "J5" V 4464 5662 50  0000 R CNN
+F 1 "Conn_01x02" V 4500 6400 50  0000 R CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical" H 4500 5850 50  0001 C CNN
+F 3 "~" H 4500 5850 50  0001 C CNN
+	1    4500 5850
+	0    1    1    0   
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x03 J2
+U 1 1 60A878E0
+P 3950 5650
+F 0 "J2" V 3914 5462 50  0000 R CNN
+F 1 "Conn_01x03" V 4100 5950 50  0000 R CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical" H 3950 5650 50  0001 C CNN
+F 3 "~" H 3950 5650 50  0001 C CNN
+	1    3950 5650
+	-1   0    0    1   
+$EndComp
 $EndSCHEMATC
