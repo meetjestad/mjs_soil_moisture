@@ -117,7 +117,7 @@ uint32_t const UPDATE_INTERVAL = 1800000; //30m
 uint32_t const GPS_TIMEOUT = 120000; //2m
 uint32_t const WIRE_TIMEOUT = 1000000; //microseconds
 uint32_t const SWG_GND_DELAY=2000; //milliseconds
-uint32_t const SOIL_DELAY=6000; //milliseconds (8000-2000 for SWG_GND)
+uint32_t const SOIL_DELAY=10000; //milliseconds (8000-2000 for SWG_GND)
 long const TTL_timeout=8000; //ms
 
 // Update GPS position after transmitting this many updates

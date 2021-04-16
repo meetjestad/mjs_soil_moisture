@@ -53,6 +53,7 @@ int NTC_L=1;
 int NTC_H=0;
 int NTC_I=A2;
 int F_OUT=8;
+int E=3; //remove for newer PCBs
 
 //multiplexer settings
 void setMult(){
@@ -143,14 +144,6 @@ uint16_t NTC_temp(int tsample){
 //measurement loop
 void measure_loop(){
   int c=0;
-  
-  //set the multiplexer
-  digitalWrite(S0,L[reg].S0);
-  digitalWrite(S1,L[reg].S1);
-  digitalWrite(S2,L[reg].S2);
-
-  //Switching delay
-  delay(100);
 
   //start the measurement
   pulseCount = 0;
@@ -186,11 +179,7 @@ void measure_loop(){
   for(int i=0; i<samples;i++){
     C_raw_freq[i]=0;
   }
-
-  //multiplexer disabled
-  digitalWrite(S0,HIGH);
-  digitalWrite(S1,HIGH);
-  digitalWrite(S2,HIGH);
+  
 }
 
 void setup(){
@@ -203,19 +192,18 @@ void setup(){
   pinMode(S0, OUTPUT);
   pinMode(S1, OUTPUT);
   pinMode(S2, OUTPUT);
-  digitalWrite(S0,HIGH);
-  digitalWrite(S1,HIGH);
-  digitalWrite(S2,HIGH);
+
+  //remove for newer boards
+  pinMode(E, OUTPUT);
+  digitalWrite(E, LOW);
+
+  //set the multiplexer values
+  setMult();
 
   //set NTC pins
   pinMode(NTC_L, INPUT); // floating
   pinMode(NTC_H, INPUT); // floating
   pinMode(NTC_I, INPUT); // actual input
- 
-  delay(500);  //time for F_OUT to stabalize
-
-  //set the multiplexer values
-  setMult();
 
   //do not start counting pulses yet
   pulseOn=false;
@@ -235,7 +223,17 @@ void setup(){
   //to send the data over TTL-UART
   
   for(int n=0;n<num;n++){
+
     reg=n;
+    
+    //set the multiplexer values
+    digitalWrite(S0,L[reg].S0);
+    digitalWrite(S1,L[reg].S1);
+    digitalWrite(S2,L[reg].S2);
+
+    //Switching delay
+    delay(100);
+
     measure_loop();
   }
 
