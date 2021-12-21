@@ -983,17 +983,6 @@ Wire Wire Line
 Wire Wire Line
 	4250 5650 4400 5650
 $Comp
-L Device:D D1
-U 1 1 6055F6A7
-P 4500 6150
-F 0 "D1" H 4500 6300 50  0000 C CNN
-F 1 "D" H 4500 6000 50  0000 C CNN
-F 2 "Diode_THT:D_DO-15_P10.16mm_Horizontal" H 4500 6150 50  0001 C CNN
-F 3 "~" H 4500 6150 50  0001 C CNN
-	1    4500 6150
-	-1   0    0    1   
-$EndComp
-$Comp
 L Device:R R1
 U 1 1 5EA00020
 P 2800 1800
@@ -1047,6 +1036,17 @@ F 1 "Conn_01x03" V 4100 5950 50  0000 R CNN
 F 2 "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical" H 3950 5650 50  0001 C CNN
 F 3 "~" H 3950 5650 50  0001 C CNN
 	1    3950 5650
+	-1   0    0    1   
+$EndComp
+$Comp
+L Diode:1N5817 D1
+U 1 1 60810178
+P 4500 6150
+F 0 "D1" H 4500 5933 50  0000 C CNN
+F 1 "1N5817" H 4500 6024 50  0000 C CNN
+F 2 "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal" H 4500 5975 50  0001 C CNN
+F 3 "http://www.vishay.com/docs/88525/1n5817.pdf" H 4500 6150 50  0001 C CNN
+	1    4500 6150
 	-1   0    0    1   
 $EndComp
 $EndSCHEMATC
