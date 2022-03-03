@@ -1,3 +1,0 @@
-(sym_lib_table
-  (lib (name Multilevel_Schmitt-rescue)(type Legacy)(uri ${KIPRJMOD}/Multilevel_Schmitt-rescue.lib)(options "")(descr ""))
-)
