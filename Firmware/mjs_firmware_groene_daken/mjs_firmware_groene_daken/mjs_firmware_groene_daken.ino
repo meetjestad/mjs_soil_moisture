@@ -755,6 +755,12 @@ uint8_t extra_bits = 0;
   extra_bits += 9 * (EXTRA_SIZE_BITS + SPS30_EXTRA_FIELD_BITS);
 #endif // WITH_SPS30_I2C
 
+#ifdef WITH_GREENROOF
+
+  extra_bits += (EXTRA_SIZE_BITS+15)+(EXTRA_SIZE_BITS+7);
+
+#endif
+
   const uint8_t SOLAR_EXTRA_FIELD_BITS = 15;
   if (SOLAR_DIVIDER_RATIO) {
     extra_bits += EXTRA_SIZE_BITS + SOLAR_EXTRA_FIELD_BITS;
@@ -810,8 +816,6 @@ uint8_t extra_bits = 0;
   }
 
 #ifdef WITH_GREENROOF
-
-  extra_bits += (EXTRA_SIZE_BITS+15)+(EXTRA_SIZE_BITS+7);
   
   //send the measurement of Soil moisture
   appendExtra(packet, soilM, 16);
