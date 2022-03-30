@@ -67,7 +67,8 @@ float const reference_voltage_internal = 1137.0;
 
 // setup GPS module
 uint8_t const GPS_PIN = 8;
-uint8_t const GPS_ENABLE_PIN = 20;
+uint8_t const GPS_ENABLE_PIN = 20; 
+uint8_t const PIN_ENABLE_3V_SENS=GPS_ENABLE_PIN;
 
 // define various pins
 uint8_t const LED_PIN = 21;
@@ -99,13 +100,6 @@ uint8_t const LUX_PIN = 0; // TODO: PC3 not mapped?
 
 // Enable this define when an SPS30 is attached over I²C
 //#define WITH_SPS30_I2C //OFF to enable room for SOILMOISTURE in output
-
-// pins for the soil moisture measurements
-#define WITH_SOILMOISTURE
-uint8_t const SM_PIN1 = A0;
-uint8_t const SM_PIN2 = A1;
-uint8_t const ST_PIN1 = A2;
-uint8_t const ST_PIN2 = A3;
 
 #else
   #error "Unknown board"
@@ -141,6 +135,13 @@ HTU21D htu;
 
 // GPS reader
 NMEAGPS gps;
+
+// pins for the soil moisture measurements
+#define WITH_SOILMOISTURE
+uint8_t const SM_PIN1 = A0;
+uint8_t const SM_PIN2 = A1;
+uint8_t const ST_PIN1 = A2;
+uint8_t const ST_PIN2 = A3;
 
 // Most recently read values
 float temperature;
@@ -759,6 +760,7 @@ void queueData() {
   flags |= FLAG_WITH_LUX;
   length += 2;
 #endif
+
 #ifdef WITH_SPS30_I2C
   if (!isnan(sps30_data.typical_particle_size)) {
     flags |= FLAG_WITH_PM;
@@ -766,7 +768,7 @@ void queueData() {
   }
 #endif
 
-uint8_t extra_bits = 0;
+uint16_t extra_bits = 0;
 
 #ifdef WITH_SPS30_I2C
   // Add *all* PM data as extra fields. This defines the extra size
@@ -780,10 +782,8 @@ uint8_t extra_bits = 0;
 #endif // WITH_SPS30_I2C
 
 #ifdef WITH_SOILMOISTURE
-
   extra_bits += 2*(EXTRA_SIZE_BITS+15)+2*(EXTRA_SIZE_BITS+7);
-
-#endif
+#endif //WITH_SOILMOISTURE
 
   const uint8_t SOLAR_EXTRA_FIELD_BITS = 15;
   if (SOLAR_DIVIDER_RATIO) {
