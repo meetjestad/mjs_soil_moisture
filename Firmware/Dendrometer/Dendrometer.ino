@@ -137,11 +137,8 @@ HTU21D htu;
 NMEAGPS gps;
 
 // pins for the soil moisture measurements
-#define WITH_SOILMOISTURE
-uint8_t const SM_PIN1 = A0;
-uint8_t const SM_PIN2 = A1;
-uint8_t const ST_PIN1 = A2;
-uint8_t const ST_PIN2 = A3;
+#define WITH_DENDROMETER
+uint8_t const DENDRO_PIN = A1;
 
 // Most recently read values
 float temperature;
@@ -160,11 +157,8 @@ int32_t lng24 = 0;
 struct sps30_measurement sps30_data;
 #endif
 
-#ifdef WITH_SOILMOISTURE
-uint16_t soilM1=0;
-uint16_t soilM2=0;
-uint16_t soilT1=0;
-uint16_t soilT2=0;
+#ifdef WITH_DENDROMETER
+uint16_t treeDistance=0;
 #endif
 
 // setup timing variables
@@ -322,12 +316,8 @@ void setup() {
   pinMode(LUX_PIN, INPUT);
   #endif
 
-  #ifdef WITH_SOILMOISTURE
-  pinMode(SM_PIN1, INPUT);
-  pinMode(SM_PIN2, INPUT);
-  pinMode(ST_PIN1, INPUT);
-  pinMode(ST_PIN2, INPUT);
-  
+  #ifdef WITH_DENDROMETER
+  pinMode(DENDRO_PIN, INPUT);
   #endif
 
   // start communication to sensors
@@ -350,13 +340,10 @@ void setup() {
     lux = readLux();
 #endif
 
-#ifdef WITH_SOILMOISTURE
+#ifdef WITH_DENDROMETER
    digitalWrite(PIN_ENABLE_3V_SENS, HIGH);
    delay(500);
-   soilM1=readSoilM(10,SM_PIN1);
-   soilM2=readSoilM(10,SM_PIN2);
-   soilT1=readSoilT(10,ST_PIN1);
-   soilT2=readSoilT(10,ST_PIN2);
+   treeDistance=readDistance(10,DENDRO_PIN);
    digitalWrite(PIN_ENABLE_3V_SENS, LOW);
 #endif
 
@@ -403,18 +390,11 @@ void setup() {
     Serial.println(lux);
 #endif // WITH_LUX
 
-#ifdef WITH_SOILMOISTURE
-    Serial.print(F("\n10cm = SoilM: "));
-    Serial.print(soilM1);
-    Serial.print(F(" | SoilT: "));
-    Serial.println(soilT1);
-    
-    Serial.print(F("\n40cm = SoilM: "));
-    Serial.print(soilM2);
-    Serial.print(F(" | SoilT: "));
-    Serial.println(soilT2);
+#ifdef WITH_DENDROMETER
+    Serial.print(F("\nTree distance: "));
+    Serial.print(treeDistance);
     Serial.println();
-#endif //WITH_SOILMOISTURE
+#endif //WITH_DENDROMETER
 
 #if defined(WITH_SPS30_I2C)
     if (!isnan(sps30_data.typical_particle_size)) {
@@ -497,13 +477,10 @@ void loop() {
   lux = readLux();
 #endif // WITH_LUX
 
-#ifdef WITH_SOILMOISTURE
+#ifdef WITH_DENDROMETER
    digitalWrite(PIN_ENABLE_3V_SENS, HIGH);
    delay(500);
-   soilM1=readSoilM(10,SM_PIN1);
-   soilM2=readSoilM(10,SM_PIN2);
-   soilT1=readSoilT(10,ST_PIN1);
-   soilT2=readSoilT(10,ST_PIN2);
+   treeDistance=readDistance(10,DENDRO_PIN);
    digitalWrite(PIN_ENABLE_3V_SENS, LOW);
 #endif
 
@@ -635,19 +612,12 @@ void dumpData() {
   Serial.print(lux);
 #endif // WITH_LUX
 
-#ifdef WITH_SOILMOISTURE
-    Serial.print(F("\n10cm = SoilM: "));
-    Serial.print(soilM1);
-    Serial.print(F(" | SoilT: "));
-    Serial.println(soilT1);
-    
-    Serial.print(F("\n40cm = SoilM: "));
-    Serial.print(soilM2);
-    Serial.print(F(" | SoilT: "));
-    Serial.println(soilT2);
+#ifdef WITH_DENDROMETER
+    Serial.print(F("\nTree Distance: "));
+    Serial.print(treeDistance);
     Serial.println();
 
-#endif //WITH_SOILMOISTURE
+#endif //WITH_DENDROMETER
 
 #if defined(WITH_SPS30_I2C)
   if (!isnan(sps30_data.typical_particle_size)) {
@@ -781,9 +751,9 @@ uint16_t extra_bits = 0;
   extra_bits += 9 * (EXTRA_SIZE_BITS + SPS30_EXTRA_FIELD_BITS);
 #endif // WITH_SPS30_I2C
 
-#ifdef WITH_SOILMOISTURE
-  extra_bits += 2*(EXTRA_SIZE_BITS+15)+2*(EXTRA_SIZE_BITS+7);
-#endif //WITH_SOILMOISTURE
+#ifdef WITH_DENDROMETER
+  extra_bits += EXTRA_SIZE_BITS+15;
+#endif //WITH_DENDROMETER
 
   const uint8_t SOLAR_EXTRA_FIELD_BITS = 15;
   if (SOLAR_DIVIDER_RATIO) {
@@ -861,13 +831,10 @@ uint16_t extra_bits = 0;
   }
 #endif // WITH_SPS30_I2C
 
-#ifdef WITH_SOILMOISTURE
+#ifdef WITH_DENDROMETER
   
   //send the measurement of Soil moisture and temperature, for each level
-  appendExtra(packet, soilM1, 16);
-  appendExtra(packet, soilT1, 8);
-  appendExtra(packet, soilM2, 16);
-  appendExtra(packet, soilT2, 8);
+  appendExtra(packet, treeDistance, 16);
  
 #endif
 
@@ -1104,45 +1071,15 @@ void writeLed(uint32_t rgb) {
   #endif
 }
 
-#ifdef WITH_SOILMOISTURE
+#ifdef WITH_DENDROMETER
 
-uint8_t readSoilT(int tsample, int ST_PIN){
-  
-  //ADC values, assuming Vcc=1024
-  float steps = 1024;
-
-  //NTC parameters
-  float r0=10000;
-  float T0=25+273;
-  float r_ref=15000; //adjust
-  float beta=3950;
-   
-  //measurement
-  int T_sum=0;
-  int t=0;
-  while(t<tsample){
-    T_sum+=analogRead(ST_PIN);
-    t=t+1; 
-  }
-
-  //calculate the temperature
-  uint16_t Tint=T_sum/t;  
-  float Tv=Tint/steps;
-  float Tr=r_ref*(1-Tv)/Tv;
-  float Tc=1/(log(Tr/r0)/beta+1/T0)-273;
-  uint8_t Traw = (Tc+20)*4;
-
-  return Traw;
-  
-}
-
-uint16_t readSoilM(int samples, int SM_PIN){
+uint16_t readDistance(int samples, int PIN){
   int c=0;
   float sum=0;
   
   while(c<samples){
       // average a number of measurements delay(x)appart
-      sum+=analogRead(SM_PIN);   //Steps
+      sum+=analogRead(PIN);   //Steps
       delay(200);
       c++;    
   }

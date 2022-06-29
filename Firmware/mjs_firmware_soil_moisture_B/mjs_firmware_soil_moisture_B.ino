@@ -138,9 +138,9 @@ NMEAGPS gps;
 
 // pins for the soil moisture measurements
 #define WITH_SOILMOISTURE
-uint8_t const SM_PIN1 = A0;
+uint8_t const SM_PIN1 = A2;
 uint8_t const SM_PIN2 = A1;
-uint8_t const ST_PIN1 = A2;
+uint8_t const ST_PIN1 = A4;
 uint8_t const ST_PIN2 = A3;
 
 // Most recently read values
