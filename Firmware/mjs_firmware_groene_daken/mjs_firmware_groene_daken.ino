@@ -1090,7 +1090,7 @@ uint8_t readSoilT(int tsample){
   //NTC parameters
   float r0=10000;
   float T0=25+273;
-  float r_ref=10000; //adjust
+  float r_ref=15000; //adjust
   float beta=3950;
    
   //measurement
