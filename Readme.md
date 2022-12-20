@@ -4,7 +4,8 @@ MeetJeStad measurement setups from the soil moisture project
 This repository contains the arduino code and PCB design files for the MeetJeStad Soil Moisture and Green Roof measurement setups
 
 Firmware is in the form of an Arduino Sketch, for more info on arduino and latest version see  https://www.arduino.cc
-Electronics and PCB are designed in KiCad, which can be downloaded from https://www.kicad.org/
+
+Electronics and PCB are designed in KiCad, which can be downloaded from https://kicad.org/
 
 ## Branches
 
