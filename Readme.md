@@ -1,5 +1,5 @@
-MeetJeStad Soil Moisture Prototype V2
-=====================================
+MeetJeStad measurement setups from the soil moisture project
+============================================================
 
 This repository contains the arduino code and PCB design files for the MeetJeStad Soil Moisture and Green Roof measurement setups
 
